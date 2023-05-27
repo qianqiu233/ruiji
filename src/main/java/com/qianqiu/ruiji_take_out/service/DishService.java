@@ -22,4 +22,6 @@ public interface DishService extends IService<Dish> {
 //    List<Dish> DishList(Dish dish);
 
     List<DishDto> DishList(Dish dish);
+
+    void deleteDish(String[] ids);
 }

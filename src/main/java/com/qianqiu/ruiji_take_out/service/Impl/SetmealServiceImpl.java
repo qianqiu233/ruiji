@@ -1,5 +1,6 @@
 package com.qianqiu.ruiji_take_out.service.Impl;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -12,16 +13,24 @@ import com.qianqiu.ruiji_take_out.mapper.SetmealMapper;
 import com.qianqiu.ruiji_take_out.pojo.*;
 import com.qianqiu.ruiji_take_out.service.SetmealDishService;
 import com.qianqiu.ruiji_take_out.service.SetmealService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static com.qianqiu.ruiji_take_out.utils.RedisConstant.REDIS_DISH_SETMEAL_TTL;
+
 @Service
+@Slf4j
 public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> implements SetmealService {
     @Autowired
     private SetmealMapper setmealMapper;
@@ -31,6 +40,8 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
     private CategoryMapper categoryMapper;
     @Autowired
     private SetmealDishMapper setmealDishMapper;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 分页查询
@@ -84,6 +95,8 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
     @Override
     @Transactional
     public void addSetmealWithDish(SetmealDto setmealDto) {
+        String setmealKey="setmeal:"+setmealDto.getCategoryId();
+        stringRedisTemplate.delete(setmealKey);
         //保存套餐的基本数据到套餐表Setmeal中
         setmealMapper.insert(setmealDto);
         //保存套餐菜品到setmealDish表
@@ -124,6 +137,8 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
      */
     @Override
     public void updateWithDish(SetmealDto setmealDto) {
+        String setmealKey="setmeal:"+setmealDto.getCategoryId();
+        stringRedisTemplate.delete(setmealKey);
         //更新套餐信息
         setmealMapper.updateById(setmealDto);
         //更新套餐内菜品信息
@@ -152,6 +167,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         //查询套餐的状态，停售才能删除
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.in(Setmeal::getId,ids);
+        List<Setmeal> setmeals = setmealMapper.selectList(queryWrapper);
         queryWrapper.eq(Setmeal::getStatus,1);
         Integer count = setmealMapper.selectCount(queryWrapper);
         if (count>0){
@@ -163,8 +179,15 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         LambdaQueryWrapper<SetmealDish> setmealDishLambdaQueryWrapper = new LambdaQueryWrapper<>();
         setmealDishLambdaQueryWrapper.in(SetmealDish::getSetmealId,ids);
         setmealDishMapper.delete(setmealDishLambdaQueryWrapper);
-
-
+        //判断且准备删除redis的数据完成同步
+        Iterator<Setmeal> iterator=setmeals.listIterator();
+        while (iterator.hasNext()){
+            Long categoryId = iterator.next().getCategoryId();
+            String setmealKey="setmeal:"+categoryId;
+            if (stringRedisTemplate.hasKey(setmealKey)){
+                stringRedisTemplate.delete(setmealKey);
+            }
+        }
     }
 
     /**
@@ -205,12 +228,21 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
 //    }
     @Override
     public List<Setmeal> SetmealList(Setmeal setmeal) {
+        List<Setmeal> setmeals=null;
+        String setmealKey="setmeal:"+setmeal.getCategoryId();
+        String setmealsRedisJson = stringRedisTemplate.opsForValue().get(setmealKey);
+        setmeals = JSONUtil.toList(setmealsRedisJson, Setmeal.class);
+        if(setmeals.size()!=0){
+            return setmeals;
+        }
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(setmeal.getCategoryId()!=null,Setmeal::getCategoryId,setmeal.getCategoryId());
         queryWrapper.eq(setmeal.getStatus()!=null,Setmeal::getStatus,setmeal.getStatus());
         //添加排序条件
         queryWrapper.orderByAsc(Setmeal::getPrice).orderByDesc(Setmeal::getUpdateTime);
-        List<Setmeal> setmeals = setmealMapper.selectList(queryWrapper);
+        setmeals = setmealMapper.selectList(queryWrapper);
+        String setmealsJson = JSONUtil.toJsonStr(setmeals);
+        stringRedisTemplate.opsForValue().set(setmealKey,setmealsJson,REDIS_DISH_SETMEAL_TTL, TimeUnit.MINUTES);
         return setmeals;
     }
 }

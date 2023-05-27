@@ -69,6 +69,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         //比对验证码
         if(redisCode!=null&&redisCode.equals(userCode)){
             //登录成功
+            //删除保存的验证码
+            stringRedisTemplate.delete(REDIS_USER_LOGIN_CODE);
             //判断当前用户是否为新用户，是则自动完成注册(此邮箱在数据库中是否存在)
             LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.eq(User::getPhone,userEmail);
