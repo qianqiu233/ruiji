@@ -1,5 +1,7 @@
 package com.qianqiu.ruiji_take_out.service.Impl;
 
+import cn.hutool.json.JSONUtil;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -15,16 +17,22 @@ import com.qianqiu.ruiji_take_out.pojo.Employee;
 import com.qianqiu.ruiji_take_out.service.DishFlavorService;
 import com.qianqiu.ruiji_take_out.service.DishService;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static com.qianqiu.ruiji_take_out.utils.RedisConstant.REDIS_DISH_SETMEAL_TTL;
+
 @Service
+@Slf4j
 public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements DishService {
     @Autowired
     private DishFlavorService dishFlavorService;
@@ -34,6 +42,8 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     private CategoryMapper categoryMapper;
     @Autowired
     private DishFlavorMapper dishFlavorMapper;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
 
     /**
@@ -44,6 +54,9 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     @Override
     @Transactional
     public void addDishWithFlavor(DishDto dishDto) {
+        //获取对应的分类key，删除，完成数据统一
+        String dishKey="dish:"+dishDto.getCategoryId();
+        stringRedisTemplate.delete(dishKey);
         //保存菜品的基本数据到菜品表Dish中
         this.save(dishDto);
         //保存菜品的口味到dish_flavor表
@@ -123,6 +136,8 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     @Override
     @Transactional
     public void updateWithFlavor(DishDto dishDto) {
+        String dishKey="dish:"+dishDto.getCategoryId();
+        stringRedisTemplate.delete(dishKey);
         //更新菜品信息
         dishMapper.updateById(dishDto);
         //更新口味信息
@@ -152,13 +167,22 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 //    }
 @Override
 public List<DishDto> DishList(Dish dish) {
+    List<DishDto> dishDtoList=null;
+    String dishKey="dish:"+dish.getCategoryId();
+    String dishDtoListRedisJson=stringRedisTemplate.opsForValue().get(dishKey);
+//    stringRedisTemplate.opsForHash().put(dishKey,d);
+    dishDtoList = JSONUtil.toList(dishDtoListRedisJson, DishDto.class);
+    //存在，直接返回，不走数据库
+    if(dishDtoList.size()!=0){
+        return dishDtoList;
+    }
     //构造查询条件
     LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
     queryWrapper.eq(dish.getCategoryId()!=null,Dish::getCategoryId,dish.getCategoryId());
     //添加排序条件
     queryWrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
     List<Dish> dishList = dishMapper.selectList(queryWrapper);
-    List<DishDto> dishDtoList = dishList.stream().map((item) -> {
+    dishDtoList = dishList.stream().map((item) -> {
         DishDto dishDto=new DishDto();
         BeanUtils.copyProperties(item,dishDto);
         Long categoryId = item.getCategoryId();
@@ -178,7 +202,24 @@ public List<DishDto> DishList(Dish dish) {
         return dishDto;
 
     }).collect(Collectors.toList());
+    //redis中不存在菜品数据，缓存到redis
+    String dishDtoListJson = JSONUtil.toJsonStr(dishDtoList);
+    stringRedisTemplate.opsForValue().set(dishKey,dishDtoListJson,REDIS_DISH_SETMEAL_TTL, TimeUnit.MINUTES);
     return dishDtoList;
 }
+
+    @Override
+    public void deleteDish(String[] ids) {
+        Dish dish =null;
+        for (String id : ids) {
+            dish=dishMapper.selectById(id);
+            Long categoryId = dish.getCategoryId();
+            String dishKey="dish:"+categoryId;
+            if(stringRedisTemplate.hasKey(dishKey)){
+                stringRedisTemplate.delete(dishKey);
+            }
+            dishMapper.deleteById(id);
+        }
+    }
 
 }

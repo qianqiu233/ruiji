@@ -7,5 +7,7 @@ public class RedisConstant {
     public static final String REDIS_USER_LOGIN_KEY="login:user:id:";
     public static final Long REDIS_USER_LOGIN_TTL=60L;
     public static final Long REDIS_USER_LOGIN_CODE_TTL=5L;
+    public static final Long REDIS_DISH_SETMEAL_TTL=60L;
+
 
 }

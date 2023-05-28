@@ -9,10 +9,13 @@ import com.qianqiu.ruiji_take_out.service.DishFlavorService;
 import com.qianqiu.ruiji_take_out.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static com.qianqiu.ruiji_take_out.utils.SuccessConstant.*;
 
@@ -24,6 +27,8 @@ public class DishController {
     private DishService dishService;
     @Autowired
     private DishFlavorService dishFlavorService;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 添加菜品
@@ -34,6 +39,9 @@ public class DishController {
     @PostMapping
     public R<String> addDish(@RequestBody DishDto dishDto) {
         dishService.addDishWithFlavor(dishDto);
+//        Set<String> keys = stringRedisTemplate.keys("dish:*");
+//        log.info("SET------{}",keys);
+//        stringRedisTemplate.delete(keys);
         return R.success(SUCCESS_ADD);
     }
 
@@ -74,6 +82,8 @@ public class DishController {
     public R<String> updateDish(@RequestBody DishDto dishDto) {
         //更新菜品信息，同时更新口味信息
         dishService.updateWithFlavor(dishDto);
+        //清理所有菜品的缓存数据
+
         return R.success(SUCCESS_UPDATE);
     }
 
@@ -103,9 +113,7 @@ public class DishController {
     @DeleteMapping
     @Transactional
     public R<String> deleteDish(String[] ids) {
-        for (String id : ids) {
-            dishService.removeById(id);
-        }
+        dishService.deleteDish(ids);
         return R.success(SUCCESS_DELETE);
     }
 
