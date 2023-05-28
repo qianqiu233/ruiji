@@ -23,7 +23,12 @@ spring:
         min-idle: 1
         time-between-eviction-runs: 10s
     database: 4
-#配置邮箱
+
+  cache:
+    redis:
+      time-to-live: 1800000
+
+  #配置邮箱
   mail:
     username: 2799611325@qq.com
     password: nwccxhdoybundcjj

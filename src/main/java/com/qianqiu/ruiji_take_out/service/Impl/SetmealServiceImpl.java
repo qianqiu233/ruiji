@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +96,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
      */
     @Override
     @Transactional
+   // @CacheEvict(value = "setmealCache",allEntries = true)
     public void addSetmealWithDish(SetmealDto setmealDto) {
         String setmealKey="setmeal:"+setmealDto.getCategoryId();
         stringRedisTemplate.delete(setmealKey);
@@ -117,6 +120,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
      * @return
      */
     @Override
+
     public SetmealDto EchoSetmealDataById(Long id) {
          //查询套餐数据
         Setmeal setmeal = setmealMapper.selectById(id);
@@ -136,6 +140,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
      * @param setmealDto
      */
     @Override
+    //@CacheEvict(value = "setmealCache",allEntries = true)
     public void updateWithDish(SetmealDto setmealDto) {
         String setmealKey="setmeal:"+setmealDto.getCategoryId();
         stringRedisTemplate.delete(setmealKey);
@@ -163,6 +168,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
      * @param ids
      */
     @Override
+    //@CacheEvict(value = "setmealCache",allEntries = true)
     public void deleteWithDish(List<Long> ids) {
         //查询套餐的状态，停售才能删除
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
@@ -192,7 +198,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
 
     /**
      * 查询套餐集合
-     * 我觉得应该用这个，可以查询到套餐内的菜品，然后根据喜好选择口味
+     * 我觉得应该用这个，可以查询到套餐内的菜品，然后根据喜好选择口味，不确定行不行
      * @param setmeal
      * @return
      */
@@ -227,6 +233,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
 //        return setmealDtoList;
 //    }
     @Override
+    //@Cacheable(value = "setmealCache",key = "#setmeal.categoryId")//不好看
     public List<Setmeal> SetmealList(Setmeal setmeal) {
         List<Setmeal> setmeals=null;
         String setmealKey="setmeal:"+setmeal.getCategoryId();
