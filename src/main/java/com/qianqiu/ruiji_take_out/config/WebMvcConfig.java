@@ -1,5 +1,6 @@
 package com.qianqiu.ruiji_take_out.config;
 
+import com.github.xiaoymin.knife4j.spring.annotations.EnableKnife4j;
 import com.qianqiu.ruiji_take_out.common.JacksonObjectMapper;
 import com.qianqiu.ruiji_take_out.filter.LoginInterceptor;
 import com.qianqiu.ruiji_take_out.filter.RefreshTokenInterceptor;
@@ -13,6 +14,13 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import springfox.documentation.builders.ApiInfoBuilder;
+import springfox.documentation.builders.PathSelectors;
+import springfox.documentation.builders.RequestHandlerSelectors;
+import springfox.documentation.service.ApiInfo;
+import springfox.documentation.spi.DocumentationType;
+import springfox.documentation.spring.web.plugins.Docket;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -23,6 +31,9 @@ import java.util.List;
  */
 @Slf4j
 @Configuration
+//接口文档相关
+@EnableKnife4j
+@EnableSwagger2
 public class WebMvcConfig extends WebMvcConfigurationSupport{
     /**
      * 设置金泰资源映射
@@ -33,6 +44,10 @@ public class WebMvcConfig extends WebMvcConfigurationSupport{
     @Override
     protected void addResourceHandlers(ResourceHandlerRegistry registry) {
         log.info("开启静态资源映射");
+        //接口文档相关
+        registry.addResourceHandler("doc.html").addResourceLocations("classpath:/META-INF/resources/");
+        registry.addResourceHandler("/webjars/**").addResourceLocations("classpath:/META-INF/resources/webjars/");
+
         registry.addResourceHandler("/backend/**").addResourceLocations("classpath:/backend/");
         registry.addResourceHandler("/front/**").addResourceLocations("classpath:/front/");
     }
@@ -66,5 +81,21 @@ public class WebMvcConfig extends WebMvcConfigurationSupport{
 //        // token刷新的拦截器，拦截所有请求，
 //        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
 //    }
+      public Docket createRestApi(){
+        //文档类型
+          return new Docket(DocumentationType.SWAGGER_2)
+                  .apiInfo(apiInfo())
+                  .select()
+                  .apis(RequestHandlerSelectors.basePackage("com.qianqiu.ruiji_take_out.controller"))
+                  .paths(PathSelectors.any())
+                  .build();
+      }
 
+      private ApiInfo apiInfo(){
+        return new ApiInfoBuilder()
+                .title("瑞吉外卖——千秋")
+                .version("1.0")
+                .description("瑞吉外卖接口文档")
+                .build();
+      }
 }
